@@ -2,7 +2,9 @@ package worker
 
 import (
 	"context"
+	"log"
 	"sync"
+	"time"
 
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 )
@@ -14,13 +16,10 @@ type Pool struct {
 	workerCount int
 	jobs        chan string
 	wg          sync.WaitGroup
-	cancel      context.CancelFunc
+	once        sync.Once
 }
 
 // NewPool initializes a new worker pool with the given task store and worker count.
-// We pass task IDs over the channel instead of task pointers because:
-// 1. It ensures workers always fetch the most up-to-date state from the store.
-// 2. It prevents race conditions or stale data issues from passing pointers around.
 func NewPool(store task.Store, workerCount int, queueSize int) *Pool {
 	return &Pool{
 		store:       store,
@@ -30,18 +29,62 @@ func NewPool(store task.Store, workerCount int, queueSize int) *Pool {
 }
 
 // Start launches the worker goroutines.
-// Each worker will listen on the jobs channel until it is closed or the context is cancelled.
+// Each worker will listen on the jobs channel until it is closed.
 func (p *Pool) Start(ctx context.Context) {
-	// Implementation will follow in Step 3.2
+	for i := 1; i <= p.workerCount; i++ {
+		p.wg.Add(1)
+		go p.worker(i)
+	}
+}
+
+// worker represents a single goroutine that processes jobs.
+func (p *Pool) worker(id int) {
+	defer p.wg.Done()
+	log.Printf("Worker %d: started", id)
+
+	for taskID := range p.jobs {
+		log.Printf("Worker %d: received task %s", id, taskID)
+
+		// Fetch the task
+		_, err := p.store.Get(taskID)
+		if err != nil {
+			log.Printf("Worker %d: error fetching task %s: %v", id, taskID, err)
+			continue
+		}
+
+		// Update to Running
+		if err := p.store.UpdateStatus(taskID, task.StatusRunning); err != nil {
+			log.Printf("Worker %d: error updating status for task %s to RUNNING: %v", id, taskID, err)
+		}
+
+		// Simulate work (2–5 seconds)
+		// For now, let's use a fixed 3s or random if we want to be fancy.
+		// Requirement says 2-5s.
+		workDuration := 3 * time.Second
+		log.Printf("Worker %d: processing task %s (simulating %v work)", id, taskID, workDuration)
+		time.Sleep(workDuration)
+
+		// Update to Completed
+		if err := p.store.UpdateStatus(taskID, task.StatusCompleted); err != nil {
+			log.Printf("Worker %d: error updating status for task %s to COMPLETED: %v", id, taskID, err)
+		}
+
+		log.Printf("Worker %d: finished task %s", id, taskID)
+	}
+
+	log.Printf("Worker %d: stopped", id)
 }
 
 // Submit sends a task ID to the jobs channel for processing.
-// The pool owns the channel to ensure controlled submission and backpressure.
 func (p *Pool) Submit(taskID string) {
-	// Implementation will follow in Step 3.2
+	p.jobs <- taskID
 }
 
 // Shutdown gracefully stops the worker pool, waiting for in-flight tasks to complete.
 func (p *Pool) Shutdown() {
-	// Implementation will follow in Step 3.2
+	p.once.Do(func() {
+		close(p.jobs)
+	})
+	p.wg.Wait()
+	log.Println("Worker pool: all workers stopped")
 }

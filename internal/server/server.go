@@ -1,11 +1,15 @@
 package server
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 	"github.com/crypticseeds/concurrent-job-queue/internal/worker"
+	"github.com/google/uuid"
 )
 
 // Server represents the HTTP server for the concurrent job queue.
@@ -44,15 +48,67 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "OK")
 }
 
+// CreateTaskRequest defines the expected payload for POST /tasks.
+type CreateTaskRequest struct {
+	Payload any `json:"payload"`
+}
+
+// CreateTaskResponse defines the response for successful task creation.
+type CreateTaskResponse struct {
+	ID     string      `json:"id"`
+	Status task.Status `json:"status"`
+}
+
 // handleCreateTask handles POST requests to submit new tasks.
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
-	// Placeholder for Step 4.2
-	fmt.Fprintln(w, "POST /tasks: not implemented yet")
+	var req CreateTaskRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON payload", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Generate a new unique ID for the task
+	taskID := uuid.New().String()
+	t := task.NewTask(taskID, req.Payload)
+
+	// Persist to store
+	s.store.Add(t)
+
+	// Submit to worker pool
+	s.pool.Submit(taskID)
+
+	log.Printf("Task %s created and submitted", taskID)
+
+	// Return response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(CreateTaskResponse{
+		ID:     t.ID,
+		Status: t.Status,
+	})
 }
 
 // handleGetTask handles GET requests to retrieve task status by ID.
 func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
-	// Placeholder for Step 4.2
 	id := r.PathValue("id")
-	fmt.Fprintf(w, "GET /tasks/%s: not implemented yet\n", id)
+	if id == "" {
+		http.Error(w, "missing task ID", http.StatusBadRequest)
+		return
+	}
+
+	t, err := s.store.Get(id)
+	if err != nil {
+		if errors.Is(err, task.ErrTaskNotFound) {
+			http.Error(w, "task not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("Error fetching task %s: %v", id, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(t)
 }

@@ -15,19 +15,21 @@ import (
 
 // Server represents the HTTP server for the concurrent job queue.
 type Server struct {
-	store   task.Store
-	pool    *worker.Pool
-	metrics metrics.Collector
-	router  *http.ServeMux
+	store          task.Store
+	pool           *worker.Pool
+	metrics        metrics.Collector
+	metricsHandler http.Handler
+	router         *http.ServeMux
 }
 
 // NewServer initializes a new Server with dependencies.
-func NewServer(store task.Store, pool *worker.Pool, metrics metrics.Collector) *Server {
+func NewServer(store task.Store, pool *worker.Pool, metrics metrics.Collector, metricsHandler http.Handler) *Server {
 	s := &Server{
-		store:   store,
-		pool:    pool,
-		metrics: metrics,
-		router:  http.NewServeMux(),
+		store:          store,
+		pool:           pool,
+		metrics:        metrics,
+		metricsHandler: metricsHandler,
+		router:         http.NewServeMux(),
 	}
 	s.setupRoutes()
 	return s
@@ -52,10 +54,21 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "OK")
 }
 
-// handleMetrics returns the current system metrics as JSON.
+// handleMetrics returns the current system metrics.
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(s.metrics.GetMetrics())
+	if s.metricsHandler != nil {
+		s.metricsHandler.ServeHTTP(w, r)
+		return
+	}
+
+	// Fallback to JSON for MemCollector (legacy/tests)
+	if mc, ok := s.metrics.(*metrics.MemCollector); ok {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mc.GetMetrics())
+		return
+	}
+
+	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // CreateTaskRequest defines the expected payload for POST /tasks.

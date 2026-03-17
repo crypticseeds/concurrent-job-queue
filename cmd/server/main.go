@@ -31,16 +31,27 @@ func main() {
 	slog.Info("Configuration", "worker_count", workerCount, "queue_size", queueSize)
 
 	store := task.NewMemStore()
-	metricsCollector := metrics.NewMemCollector()
+
+	var metricsCollector metrics.Collector
+	var metricsHandler http.Handler
+
+	// Initialize OTEL metrics
+	otelCollector, metricsExporter, err := metrics.NewOTELCollector()
+	if err != nil {
+		slog.Error("Failed to initialize OTEL metrics, falling back to in-memory", "error", err)
+		metricsCollector = metrics.NewMemCollector()
+	} else {
+		metricsCollector = otelCollector
+		metricsHandler = metricsExporter
+	}
+
 	pool := worker.NewPool(store, metricsCollector, workerCount, queueSize)
 
 	// 2. Start worker pool
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	pool.Start(ctx)
-
-	// 3. Initialize HTTP server
-	srv := server.NewServer(store, pool, metricsCollector)
+	srv := server.NewServer(store, pool, metricsCollector, metricsHandler)
 	httpServer := &http.Server{
 		Addr:    ":8080",
 		Handler: srv,

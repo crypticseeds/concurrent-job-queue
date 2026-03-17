@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/crypticseeds/concurrent-job-queue/internal/metrics"
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 	"github.com/crypticseeds/concurrent-job-queue/internal/worker"
 	"github.com/google/uuid"
@@ -14,17 +15,19 @@ import (
 
 // Server represents the HTTP server for the concurrent job queue.
 type Server struct {
-	store  task.Store
-	pool   *worker.Pool
-	router *http.ServeMux
+	store   task.Store
+	pool    *worker.Pool
+	metrics metrics.Collector
+	router  *http.ServeMux
 }
 
 // NewServer initializes a new Server with dependencies.
-func NewServer(store task.Store, pool *worker.Pool) *Server {
+func NewServer(store task.Store, pool *worker.Pool, metrics metrics.Collector) *Server {
 	s := &Server{
-		store:  store,
-		pool:   pool,
-		router: http.NewServeMux(),
+		store:   store,
+		pool:    pool,
+		metrics: metrics,
+		router:  http.NewServeMux(),
 	}
 	s.setupRoutes()
 	return s
@@ -33,6 +36,7 @@ func NewServer(store task.Store, pool *worker.Pool) *Server {
 // setupRoutes configures the routing for the server using modern Go 1.22+ patterns.
 func (s *Server) setupRoutes() {
 	s.router.HandleFunc("GET /health", s.handleHealth)
+	s.router.HandleFunc("GET /metrics", s.handleMetrics)
 	s.router.HandleFunc("POST /tasks", s.handleCreateTask)
 	s.router.HandleFunc("GET /tasks/{id}", s.handleGetTask)
 }
@@ -46,6 +50,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "OK")
+}
+
+// handleMetrics returns the current system metrics as JSON.
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(s.metrics.GetMetrics())
 }
 
 // CreateTaskRequest defines the expected payload for POST /tasks.
@@ -78,6 +88,8 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	// Submit to worker pool
 	s.pool.Submit(taskID)
+
+	s.metrics.IncTasksCreated()
 
 	slog.Info("Task created and submitted", "task_id", taskID)
 

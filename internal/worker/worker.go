@@ -2,7 +2,7 @@ package worker
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -40,44 +40,47 @@ func (p *Pool) Start(ctx context.Context) {
 // worker represents a single goroutine that processes jobs.
 func (p *Pool) worker(id int) {
 	defer p.wg.Done()
-	log.Printf("Worker %d: started", id)
+	logger := slog.With("worker_id", id)
+	logger.Info("Worker started")
 
 	for taskID := range p.jobs {
-		log.Printf("Worker %d: received task %s", id, taskID)
+		tlog := logger.With("task_id", taskID)
+		tlog.Info("Worker received task")
 
 		// Fetch the task
 		_, err := p.store.Get(taskID)
 		if err != nil {
-			log.Printf("Worker %d: error fetching task %s: %v", id, taskID, err)
+			tlog.Error("Error fetching task", "error", err)
 			continue
 		}
 
 		// Update to Running
 		if err := p.store.UpdateStatus(taskID, task.StatusRunning); err != nil {
-			log.Printf("Worker %d: error updating status for task %s to RUNNING: %v", id, taskID, err)
+			tlog.Error("Error updating status to RUNNING", "error", err)
 		}
 
 		// Simulate work (2–5 seconds)
 		// For now, let's use a fixed 3s or random if we want to be fancy.
 		// Requirement says 2-5s.
 		workDuration := 3 * time.Second
-		log.Printf("Worker %d: processing task %s (simulating %v work)", id, taskID, workDuration)
+		tlog.Info("Processing task", "duration", workDuration)
 		time.Sleep(workDuration)
 
 		// Update to Completed
 		if err := p.store.UpdateStatus(taskID, task.StatusCompleted); err != nil {
-			log.Printf("Worker %d: error updating status for task %s to COMPLETED: %v", id, taskID, err)
+			tlog.Error("Error updating status to COMPLETED", "error", err)
 		}
 
-		log.Printf("Worker %d: finished task %s", id, taskID)
+		tlog.Info("Worker finished task")
 	}
 
-	log.Printf("Worker %d: stopped", id)
+	logger.Info("Worker stopped")
 }
 
 // Submit sends a task ID to the jobs channel for processing.
 func (p *Pool) Submit(taskID string) {
 	p.jobs <- taskID
+	slog.Debug("Task submitted to pool", "task_id", taskID)
 }
 
 // Shutdown gracefully stops the worker pool, waiting for in-flight tasks to complete.
@@ -86,5 +89,5 @@ func (p *Pool) Shutdown() {
 		close(p.jobs)
 	})
 	p.wg.Wait()
-	log.Println("Worker pool: all workers stopped")
+	slog.Info("Worker pool: all workers stopped")
 }

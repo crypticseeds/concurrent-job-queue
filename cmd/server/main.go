@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,7 +15,11 @@ import (
 )
 
 func main() {
-	log.Println("Starting Concurrent Job Queue Server...")
+	// Initialize structured logging
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	slog.Info("Starting Concurrent Job Queue Server")
 
 	// 1. Initialize dependencies
 	store := task.NewMemStore()
@@ -38,23 +42,24 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("Server listening on %s", httpServer.Addr)
+		slog.Info("Server listening", "addr", httpServer.Addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
+			slog.Error("Server failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-stop
-	log.Println("Shutting down server...")
+	slog.Info("Shutting down server")
 
 	// 5. Shutdown sequence
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		log.Printf("HTTP server shutdown error: %v", err)
+		slog.Error("HTTP server shutdown error", "error", err)
 	}
 
 	pool.Shutdown()
-	log.Println("Service exited gracefully")
+	slog.Info("Service exited gracefully")
 }

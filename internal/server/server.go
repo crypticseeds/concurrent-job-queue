@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
@@ -79,7 +79,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	// Submit to worker pool
 	s.pool.Submit(taskID)
 
-	log.Printf("Task %s created and submitted", taskID)
+	slog.Info("Task created and submitted", "task_id", taskID)
 
 	// Return response
 	w.Header().Set("Content-Type", "application/json")
@@ -101,10 +101,11 @@ func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
 	t, err := s.store.Get(id)
 	if err != nil {
 		if errors.Is(err, task.ErrTaskNotFound) {
+			slog.Debug("Task not found", "task_id", id)
 			http.Error(w, "task not found", http.StatusNotFound)
 			return
 		}
-		log.Printf("Error fetching task %s: %v", id, err)
+		slog.Error("Error fetching task", "task_id", id, "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

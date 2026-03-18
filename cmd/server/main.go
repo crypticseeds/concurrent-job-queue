@@ -14,6 +14,7 @@ import (
 	"github.com/crypticseeds/concurrent-job-queue/internal/server"
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 	"github.com/crypticseeds/concurrent-job-queue/internal/worker"
+	"github.com/crypticseeds/concurrent-job-queue/internal/metrics"
 )
 
 func main() {
@@ -30,7 +31,8 @@ func main() {
 	slog.Info("Configuration", "worker_count", workerCount, "queue_size", queueSize)
 
 	store := task.NewMemStore()
-	pool := worker.NewPool(store, workerCount, queueSize)
+	metricsCollector := metrics.NewMemCollector()
+	pool := worker.NewPool(store, metricsCollector, workerCount, queueSize)
 
 	// 2. Start worker pool
 	ctx, cancel := context.WithCancel(context.Background())
@@ -38,7 +40,7 @@ func main() {
 	pool.Start(ctx)
 
 	// 3. Initialize HTTP server
-	srv := server.NewServer(store, pool)
+	srv := server.NewServer(store, pool, metricsCollector)
 	httpServer := &http.Server{
 		Addr:    ":8080",
 		Handler: srv,

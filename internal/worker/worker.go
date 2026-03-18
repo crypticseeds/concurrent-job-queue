@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/crypticseeds/concurrent-job-queue/internal/metrics"
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 )
 
@@ -13,6 +14,7 @@ import (
 // It owns the lifecycle of the workers and the jobs channel.
 type Pool struct {
 	store       task.Store
+	metrics     metrics.Collector
 	workerCount int
 	jobs        chan string
 	wg          sync.WaitGroup
@@ -20,9 +22,10 @@ type Pool struct {
 }
 
 // NewPool initializes a new worker pool with the given task store and worker count.
-func NewPool(store task.Store, workerCount int, queueSize int) *Pool {
+func NewPool(store task.Store, metrics metrics.Collector, workerCount int, queueSize int) *Pool {
 	return &Pool{
 		store:       store,
+		metrics:     metrics,
 		workerCount: workerCount,
 		jobs:        make(chan string, queueSize),
 	}
@@ -69,6 +72,9 @@ func (p *Pool) worker(id int) {
 		// Update to Completed
 		if err := p.store.UpdateStatus(taskID, task.StatusCompleted); err != nil {
 			tlog.Error("Error updating status to COMPLETED", "error", err)
+			p.metrics.IncTasksFailed()
+		} else {
+			p.metrics.IncTasksCompleted()
 		}
 
 		tlog.Info("Worker finished task")

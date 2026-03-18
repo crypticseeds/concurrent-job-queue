@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"strconv"
+
 	"github.com/crypticseeds/concurrent-job-queue/internal/server"
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 	"github.com/crypticseeds/concurrent-job-queue/internal/worker"
@@ -22,8 +24,13 @@ func main() {
 	slog.Info("Starting Concurrent Job Queue Server")
 
 	// 1. Initialize dependencies
+	workerCount := getEnvInt("WORKER_COUNT", 3)
+	queueSize := getEnvInt("QUEUE_SIZE", 10)
+
+	slog.Info("Configuration", "worker_count", workerCount, "queue_size", queueSize)
+
 	store := task.NewMemStore()
-	pool := worker.NewPool(store, 3, 10) // 3 workers, queue size 10 (configurable later)
+	pool := worker.NewPool(store, workerCount, queueSize)
 
 	// 2. Start worker pool
 	ctx, cancel := context.WithCancel(context.Background())
@@ -62,4 +69,17 @@ func main() {
 
 	pool.Shutdown()
 	slog.Info("Service exited gracefully")
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultValue
+	}
+	i, err := strconv.Atoi(val)
+	if err != nil {
+		slog.Warn("Invalid environment variable value, using default", "key", key, "value", val, "default", defaultValue)
+		return defaultValue
+	}
+	return i
 }

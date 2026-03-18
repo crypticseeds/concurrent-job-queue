@@ -11,10 +11,10 @@ import (
 
 	"strconv"
 
+	"github.com/crypticseeds/concurrent-job-queue/internal/metrics"
 	"github.com/crypticseeds/concurrent-job-queue/internal/server"
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 	"github.com/crypticseeds/concurrent-job-queue/internal/worker"
-	"github.com/crypticseeds/concurrent-job-queue/internal/metrics"
 )
 
 func main() {

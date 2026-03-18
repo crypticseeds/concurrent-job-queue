@@ -34,7 +34,7 @@ func NewMemStore() *MemStore {
 func (s *MemStore) Add(t *Task) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.tasks[t.ID] = t
+	s.tasks[t.ID] = t.Clone()
 }
 
 // Get retrieves a task by ID.
@@ -45,7 +45,7 @@ func (s *MemStore) Get(id string) (*Task, error) {
 	if !ok {
 		return nil, ErrTaskNotFound
 	}
-	return t, nil
+	return t.Clone(), nil
 }
 
 // UpdateStatus changes the status of an existing task and updates the timestamp.

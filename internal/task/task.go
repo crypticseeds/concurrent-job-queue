@@ -35,3 +35,17 @@ func NewTask(id string, payload interface{}) *Task {
 		Payload:   payload,
 	}
 }
+
+// Clone returns a deep copy of the task.
+func (t *Task) Clone() *Task {
+	if t == nil {
+		return nil
+	}
+	return &Task{
+		ID:        t.ID,
+		Status:    t.Status,
+		CreatedAt: t.CreatedAt,
+		UpdatedAt: t.UpdatedAt,
+		Payload:   t.Payload,
+	}
+}

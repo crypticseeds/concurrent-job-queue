@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -23,6 +24,16 @@ type Pool struct {
 
 // NewPool initializes a new worker pool with the given task store and worker count.
 func NewPool(store task.Store, metrics metrics.Collector, workerCount int, queueSize int) *Pool {
+	if workerCount <= 0 {
+		panic(fmt.Sprintf("worker.NewPool: workerCount must be > 0, got %d", workerCount))
+	}
+	if queueSize < 0 {
+		panic(fmt.Sprintf("worker.NewPool: queueSize must be >= 0, got %d", queueSize))
+	}
+	if store == nil {
+		panic("worker.NewPool: store must not be nil")
+	}
+
 	return &Pool{
 		store:       store,
 		metrics:     metrics,

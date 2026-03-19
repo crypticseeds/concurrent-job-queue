@@ -27,6 +27,14 @@ func main() {
 	// 1. Initialize dependencies
 	workerCount := getEnvInt("WORKER_COUNT", 3)
 	queueSize := getEnvInt("QUEUE_SIZE", 10)
+	if workerCount <= 0 {
+		slog.Error("Invalid configuration: WORKER_COUNT must be greater than 0", "worker_count", workerCount)
+		os.Exit(1)
+	}
+	if queueSize <= 0 {
+		slog.Error("Invalid configuration: QUEUE_SIZE must be greater than 0", "queue_size", queueSize)
+		os.Exit(1)
+	}
 
 	slog.Info("Configuration", "worker_count", workerCount, "queue_size", queueSize)
 

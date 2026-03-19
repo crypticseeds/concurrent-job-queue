@@ -2,13 +2,14 @@ package metrics
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"net/http"
 )
 
 // Collector defines the interface for collecting system metrics.
@@ -73,9 +74,18 @@ func NewOTELCollector() (*OTELCollector, http.Handler, error) {
 	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(exporter))
 	meter := meterProvider.Meter("job-queue")
 
-	created, _ := meter.Int64Counter("tasks_created_total", metric.WithDescription("Total number of tasks created"))
-	completed, _ := meter.Int64Counter("tasks_completed_total", metric.WithDescription("Total number of tasks completed"))
-	failed, _ := meter.Int64Counter("tasks_failed_total", metric.WithDescription("Total number of tasks failed"))
+	created, err := meter.Int64Counter("tasks_created_total", metric.WithDescription("Total number of tasks created"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("create tasks_created_total counter: %w", err)
+	}
+	completed, err := meter.Int64Counter("tasks_completed_total", metric.WithDescription("Total number of tasks completed"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("create tasks_completed_total counter: %w", err)
+	}
+	failed, err := meter.Int64Counter("tasks_failed_total", metric.WithDescription("Total number of tasks failed"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("create tasks_failed_total counter: %w", err)
+	}
 
 	return &OTELCollector{
 		created:   created,

@@ -22,13 +22,18 @@ FROM alpine:latest
 # Install CA certificates for potential external requests
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+# Create non-root user/group for running the application
+RUN addgroup -S app && adduser -S -G app app
+
+WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/bin/job-queue .
+COPY --from=builder /app/bin/job-queue /app/job-queue
+RUN chown -R app:app /app
 
 # Expose server port
 EXPOSE 8080
 
 # Run the application
-ENTRYPOINT ["./job-queue"]
+USER app
+ENTRYPOINT ["/app/job-queue"]

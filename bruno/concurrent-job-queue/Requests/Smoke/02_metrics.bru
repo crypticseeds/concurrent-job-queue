@@ -1,0 +1,18 @@
+meta {
+  name: Metrics - GET /metrics
+  type: http
+  seq: 2
+  tags: [smoke]
+}
+
+get {
+  url: {{baseUrl}}/metrics
+}
+
+tests {
+  expect(res.status).to.equal(200);
+  // OTEL+prometheus exporter returns text/plain; fallback MemCollector returns JSON in tests.
+  const ct = (res.getHeader("content-type") || "").toLowerCase();
+  expect(ct).to.satisfy((v) => v.includes("text/plain") || v.includes("application/json"));
+}
+

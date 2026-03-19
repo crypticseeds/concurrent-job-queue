@@ -1,0 +1,16 @@
+meta {
+  name: Health - OK
+  type: http
+  seq: 1
+  tags: [smoke]
+}
+
+get {
+  url: {{baseUrl}}/health
+}
+
+tests {
+  expect(res.status).to.equal(200);
+  expect(res.text()).to.contain("OK");
+}
+

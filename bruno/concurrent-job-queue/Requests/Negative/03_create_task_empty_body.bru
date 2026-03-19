@@ -1,0 +1,17 @@
+meta {
+  name: Create Task - empty body (201)
+  type: http
+  seq: 3
+  tags: [edge]
+}
+
+post {
+  url: {{baseUrl}}/tasks
+}
+
+tests {
+  expect(res.status).to.equal(201);
+  expect(res.body).to.have.property("id");
+  expect(res.body.status).to.equal("PENDING");
+}
+

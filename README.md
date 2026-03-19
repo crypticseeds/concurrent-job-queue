@@ -2,6 +2,8 @@
 
 A production-grade asynchronous task processor in Go. Designed for high reliability, backpressure management, and observability using the OpenTelemetry (OTEL) ecosystem.
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/crypticseeds/concurrent-job-queue?utm_source=oss&utm_medium=github&utm_campaign=crypticseeds%2Fconcurrent-job-queue&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews) 
+
 ### 1. Problem
 Modern systems require a way to offload long-running or resource-intensive tasks from the critical request path. This project solves that by decoupling task submission from execution, preventing HTTP handler exhaustion and ensuring task persistence during transient failures.
 
@@ -65,3 +67,29 @@ docker-compose up --build
 ```bash
 make test
 ```
+
+Here’s a tighter, clearer version:
+
+### 8. API Testing with Bruno (`bruno/`)
+
+The `bruno/` directory provides a ready-to-run API test collection for this service using **Bruno**, an offline-first alternative to Postman.
+
+* **Purpose:** Version-controlled API requests covering smoke, concurrency, and negative test cases.
+* **Usage:** Validate key endpoints (e.g. health, metrics, create/get task) locally without cloud dependencies.
+* **Benefit:** Fast, reproducible testing with no external sync or account required.
+
+Want a short “getting started” snippet for running the collection?
+
+---
+
+<div align="center">
+
+### 🔗 Connect with Me
+
+[![Portfolio](https://img.shields.io/badge/Portfolio-000?style=for-the-badge&logo=ko-fi&logoColor=white)](https://devopsfoundry.com/projects/)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/femi-akinlotan/)
+[![Mail](https://img.shields.io/badge/Email-lightgrey?style=for-the-badge&logo=minutemailer&logoColor=white)](mailto:femi.akinlotan@devopsfoundry.com)
+
+**Built with ❤️ by Femi Akinlotan**
+
+</div>

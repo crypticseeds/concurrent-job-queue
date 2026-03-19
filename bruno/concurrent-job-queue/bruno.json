@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "name": "concurrent-job-queue",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}
+

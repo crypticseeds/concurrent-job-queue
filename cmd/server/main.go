@@ -27,6 +27,7 @@ func main() {
 	// 1. Initialize dependencies
 	workerCount := getEnvInt("WORKER_COUNT", 3)
 	queueSize := getEnvInt("QUEUE_SIZE", 10)
+	taskTTL := getEnvDuration("TASK_TTL", 1*time.Hour)
 	if workerCount <= 0 {
 		slog.Error("Invalid configuration: WORKER_COUNT must be greater than 0", "worker_count", workerCount)
 		os.Exit(1)
@@ -36,7 +37,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("Configuration", "worker_count", workerCount, "queue_size", queueSize)
+	slog.Info("Configuration", "worker_count", workerCount, "queue_size", queueSize, "task_ttl", taskTTL)
 
 	store := task.NewShardedStore(32)
 
@@ -59,6 +60,22 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	pool.Start(ctx)
+
+	// 3. Start background cleanup
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				slog.Debug("Running background task cleanup", "ttl", taskTTL)
+				store.Cleanup(taskTTL)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	srv := server.NewServer(store, pool, metricsCollector, metricsHandler)
 	httpServer := &http.Server{
 		Addr:    ":8080",
@@ -103,4 +120,17 @@ func getEnvInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return i
+}
+
+func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultValue
+	}
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		slog.Warn("Invalid environment variable duration, using default", "key", key, "value", val, "default", defaultValue)
+		return defaultValue
+	}
+	return d
 }

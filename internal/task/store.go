@@ -16,6 +16,7 @@ type Store interface {
 	Add(t *Task)
 	Get(id string) (*Task, error)
 	UpdateStatus(id string, status Status) error
+	Cleanup(ttl time.Duration)
 }
 
 // MemStore is an in-memory implementation of the Store interface.
@@ -63,6 +64,19 @@ func (s *MemStore) UpdateStatus(id string, status Status) error {
 	return nil
 }
 
+// Cleanup removes tasks that have been in a terminal state for longer than the specified TTL.
+func (s *MemStore) Cleanup(ttl time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	for id, t := range s.tasks {
+		if (t.Status == StatusCompleted || t.Status == StatusFailed) && now.Sub(t.UpdatedAt) > ttl {
+			delete(s.tasks, id)
+		}
+	}
+}
+
 // ShardedStore is a highly concurrent implementation of the Store interface.
 // It distributes tasks across multiple shards to reduce lock contention.
 type ShardedStore struct {
@@ -106,4 +120,11 @@ func (s *ShardedStore) Get(id string) (*Task, error) {
 // UpdateStatus changes the status of an existing task in the appropriate shard.
 func (s *ShardedStore) UpdateStatus(id string, status Status) error {
 	return s.getShard(id).UpdateStatus(id, status)
+}
+
+// Cleanup triggers cleanup on all shards.
+func (s *ShardedStore) Cleanup(ttl time.Duration) {
+	for _, shard := range s.shards {
+		shard.Cleanup(ttl)
+	}
 }

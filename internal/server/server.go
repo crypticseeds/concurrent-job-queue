@@ -100,10 +100,19 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	s.store.Add(t)
 
 	// Submit to worker pool
-	s.pool.Submit(worker.Job{
+	if err := s.pool.Submit(worker.Job{
 		TaskID:  taskID,
 		Payload: req.Payload,
-	})
+	}); err != nil {
+		if errors.Is(err, worker.ErrQueueFull) {
+			s.metrics.IncTasksRejected()
+			http.Error(w, "service unavailable: queue full", http.StatusServiceUnavailable)
+			return
+		}
+		// Fallback for other errors if any
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 
 	s.metrics.IncTasksCreated()
 

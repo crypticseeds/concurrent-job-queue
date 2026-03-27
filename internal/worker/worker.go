@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -10,6 +11,9 @@ import (
 	"github.com/crypticseeds/concurrent-job-queue/internal/metrics"
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 )
+
+// ErrQueueFull is returned when the worker pool's job queue is full.
+var ErrQueueFull = errors.New("worker pool: job queue is full")
 
 // Job represents a unit of work that is passed to the worker pool.
 type Job struct {
@@ -93,9 +97,16 @@ func (p *Pool) worker(id int) {
 }
 
 // Submit sends a Job to the jobs channel for processing.
-func (p *Pool) Submit(job Job) {
-	p.jobs <- job
-	slog.Debug("Task submitted to pool", "task_id", job.TaskID)
+// If the queue is full, it returns ErrQueueFull instead of blocking.
+func (p *Pool) Submit(job Job) error {
+	select {
+	case p.jobs <- job:
+		slog.Debug("Task submitted to pool", "task_id", job.TaskID)
+		return nil
+	default:
+		slog.Warn("Job queue is full, rejecting task", "task_id", job.TaskID)
+		return ErrQueueFull
+	}
 }
 
 // Shutdown gracefully stops the worker pool, waiting for in-flight tasks to complete.

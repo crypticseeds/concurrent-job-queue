@@ -1,0 +1,24 @@
+meta {
+  name: Create Task - invalid JSON (400)
+  type: http
+  seq: 1
+  tags: [negative]
+}
+
+post {
+  url: {{baseUrl}}/tasks
+}
+
+headers {
+  content-type: application/json
+}
+
+body:text {
+  { "payload": "oops", 
+}
+
+tests {
+  expect(res.status).to.equal(400);
+  expect(res.text()).to.contain("invalid JSON payload");
+}
+

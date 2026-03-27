@@ -34,3 +34,6 @@ go.work.sum
 .ai/
 /.idea/.gitignore
 /.coderabbitignore
+bruno/.DS_Store
+bruno/concurrent-job-queue/.DS_Store
+bruno/concurrent-job-queue/Requests/.DS_Store

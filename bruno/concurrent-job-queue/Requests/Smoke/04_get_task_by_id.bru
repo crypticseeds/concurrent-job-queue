@@ -1,0 +1,25 @@
+meta {
+  name: Get Task - by ID (from create)
+  type: http
+  seq: 4
+  tags: [smoke]
+}
+
+get {
+  url: {{baseUrl}}/tasks/:id
+}
+
+params:path {
+  id: {{taskId}}
+}
+
+tests {
+  expect(res.status).to.equal(200);
+  expect(res.body).to.have.property("id");
+  expect(res.body.id).to.equal(bru.getVar("taskId"));
+  expect(res.body).to.have.property("status");
+  expect(["PENDING", "RUNNING", "COMPLETED", "FAILED"]).to.include(res.body.status);
+  expect(res.body).to.have.property("created_at");
+  expect(res.body).to.have.property("updated_at");
+}
+

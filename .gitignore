@@ -31,7 +31,6 @@ go.work.sum
  .idea/
 # .vscode/
 /bin/
-.ai/
 /.idea/.gitignore
 /.coderabbitignore
 bruno/.DS_Store

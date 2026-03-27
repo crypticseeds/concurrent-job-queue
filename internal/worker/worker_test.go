@@ -25,7 +25,7 @@ func TestPool(t *testing.T) {
 		sTask := task.NewTask(taskID, nil)
 		store.Add(sTask)
 
-		pool.Submit(taskID)
+		pool.Submit(Job{TaskID: taskID, Payload: nil})
 
 		// Poll for completion (max 5s, given 3s simulation)
 		deadline := time.Now().Add(6 * time.Second)
@@ -55,8 +55,8 @@ func TestPool(t *testing.T) {
 		// Submit 2 tasks that take 3s each
 		store.Add(task.NewTask("s1", nil))
 		store.Add(task.NewTask("s2", nil))
-		pool.Submit("s1")
-		pool.Submit("s2")
+		pool.Submit(Job{TaskID: "s1", Payload: nil})
+		pool.Submit(Job{TaskID: "s2", Payload: nil})
 
 		// Wait a tiny bit for workers to pick them up
 		time.Sleep(100 * time.Millisecond)

@@ -11,13 +11,19 @@ import (
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 )
 
+// Job represents a unit of work that is passed to the worker pool.
+type Job struct {
+	TaskID  string
+	Payload any
+}
+
 // Pool manages a collection of workers that process tasks concurrently.
 // It owns the lifecycle of the workers and the jobs channel.
 type Pool struct {
 	store       task.Store
 	metrics     metrics.Collector
 	workerCount int
-	jobs        chan string
+	jobs        chan Job
 	wg          sync.WaitGroup
 	once        sync.Once
 }
@@ -38,7 +44,7 @@ func NewPool(store task.Store, metrics metrics.Collector, workerCount int, queue
 		store:       store,
 		metrics:     metrics,
 		workerCount: workerCount,
-		jobs:        make(chan string, queueSize),
+		jobs:        make(chan Job, queueSize),
 	}
 }
 
@@ -57,31 +63,23 @@ func (p *Pool) worker(id int) {
 	logger := slog.With("worker_id", id)
 	logger.Info("Worker started")
 
-	for taskID := range p.jobs {
-		tlog := logger.With("task_id", taskID)
+	for job := range p.jobs {
+		tlog := logger.With("task_id", job.TaskID)
 		tlog.Info("Worker received task")
 
-		// Fetch the task
-		_, err := p.store.Get(taskID)
-		if err != nil {
-			tlog.Error("Error fetching task", "error", err)
-			continue
-		}
-
 		// Update to Running
-		if err := p.store.UpdateStatus(taskID, task.StatusRunning); err != nil {
+		if err := p.store.UpdateStatus(job.TaskID, task.StatusRunning); err != nil {
 			tlog.Error("Error updating status to RUNNING", "error", err)
 		}
 
-		// Simulate work (2–5 seconds)
-		// For now, let's use a fixed 3s or random if we want to be fancy.
-		// Requirement says 2-5s.
+		// Simulate work (2–5 seconds) using job.Payload if needed
+		// For now, let's use a fixed 3s as per previous implementation.
 		workDuration := 3 * time.Second
 		tlog.Info("Processing task", "duration", workDuration)
 		time.Sleep(workDuration)
 
 		// Update to Completed
-		if err := p.store.UpdateStatus(taskID, task.StatusCompleted); err != nil {
+		if err := p.store.UpdateStatus(job.TaskID, task.StatusCompleted); err != nil {
 			tlog.Error("Error updating status to COMPLETED", "error", err)
 			p.metrics.IncTasksFailed()
 		} else {
@@ -94,10 +92,10 @@ func (p *Pool) worker(id int) {
 	logger.Info("Worker stopped")
 }
 
-// Submit sends a task ID to the jobs channel for processing.
-func (p *Pool) Submit(taskID string) {
-	p.jobs <- taskID
-	slog.Debug("Task submitted to pool", "task_id", taskID)
+// Submit sends a Job to the jobs channel for processing.
+func (p *Pool) Submit(job Job) {
+	p.jobs <- job
+	slog.Debug("Task submitted to pool", "task_id", job.TaskID)
 }
 
 // Shutdown gracefully stops the worker pool, waiting for in-flight tasks to complete.

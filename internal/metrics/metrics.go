@@ -17,6 +17,7 @@ type Collector interface {
 	IncTasksCreated()
 	IncTasksCompleted()
 	IncTasksFailed()
+	IncTasksRejected()
 }
 
 // Snapshot represents a point-in-time view of the metrics.
@@ -24,6 +25,7 @@ type Snapshot struct {
 	TasksCreated   uint64 `json:"tasks_created_total"`
 	TasksCompleted uint64 `json:"tasks_completed_total"`
 	TasksFailed    uint64 `json:"tasks_failed_total"`
+	TasksRejected  uint64 `json:"tasks_rejected_total"`
 }
 
 // MemCollector is an in-memory implementation for tests.
@@ -31,6 +33,7 @@ type MemCollector struct {
 	created   uint64
 	completed uint64
 	failed    uint64
+	rejected  uint64
 }
 
 func NewMemCollector() *MemCollector {
@@ -49,11 +52,16 @@ func (c *MemCollector) IncTasksFailed() {
 	atomic.AddUint64(&c.failed, 1)
 }
 
+func (c *MemCollector) IncTasksRejected() {
+	atomic.AddUint64(&c.rejected, 1)
+}
+
 func (c *MemCollector) GetMetrics() Snapshot {
 	return Snapshot{
 		TasksCreated:   atomic.LoadUint64(&c.created),
 		TasksCompleted: atomic.LoadUint64(&c.completed),
 		TasksFailed:    atomic.LoadUint64(&c.failed),
+		TasksRejected:  atomic.LoadUint64(&c.rejected),
 	}
 }
 
@@ -62,6 +70,7 @@ type OTELCollector struct {
 	created   metric.Int64Counter
 	completed metric.Int64Counter
 	failed    metric.Int64Counter
+	rejected  metric.Int64Counter
 }
 
 // NewOTELCollector initializes OpenTelemetry metrics and returns a collector.
@@ -86,11 +95,16 @@ func NewOTELCollector() (*OTELCollector, http.Handler, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("create tasks_failed_total counter: %w", err)
 	}
+	rejected, err := meter.Int64Counter("tasks_rejected_total", metric.WithDescription("Total number of tasks rejected"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("create tasks_rejected_total counter: %w", err)
+	}
 
 	return &OTELCollector{
 		created:   created,
 		completed: completed,
 		failed:    failed,
+		rejected:  rejected,
 	}, promhttp.Handler(), nil
 }
 
@@ -107,4 +121,9 @@ func (c *OTELCollector) IncTasksCompleted() {
 // IncTasksFailed increments the count of failed tasks.
 func (c *OTELCollector) IncTasksFailed() {
 	c.failed.Add(context.Background(), 1)
+}
+
+// IncTasksRejected increments the count of rejected tasks.
+func (c *OTELCollector) IncTasksRejected() {
+	c.rejected.Add(context.Background(), 1)
 }

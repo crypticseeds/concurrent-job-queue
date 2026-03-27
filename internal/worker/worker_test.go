@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -74,6 +75,32 @@ func TestPool(t *testing.T) {
 		m2, _ := store.Get("s2")
 		if m1.Status != task.StatusCompleted || m2.Status != task.StatusCompleted {
 			t.Errorf("tasks not completed after shutdown: s1=%s, s2=%s", m1.Status, m2.Status)
+		}
+	})
+
+	t.Run("Non-Blocking Submit (Queue Full)", func(t *testing.T) {
+		// Pool with 0 queue size and 1 worker
+		pool := NewPool(store, collector, 1, 0)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		pool.Start(ctx)
+
+		// Wait a bit to ensure worker is ready
+		time.Sleep(50 * time.Millisecond)
+
+		// Submit one job to occupy the worker
+		job1 := Job{TaskID: "j1", Payload: nil}
+		if err := pool.Submit(job1); err != nil {
+			t.Fatalf("failed to submit first job: %v", err)
+		}
+
+		// Since queue size is 0, the next submit should fail immediately
+		// but we might need a tiny sleep to ensure the worker has NOT yet finished
+		// OR we can just rely on the fact that the worker takes 3s.
+		job2 := Job{TaskID: "j2", Payload: nil}
+		err := pool.Submit(job2)
+		if !errors.Is(err, ErrQueueFull) {
+			t.Errorf("expected ErrQueueFull, got %v", err)
 		}
 	})
 }

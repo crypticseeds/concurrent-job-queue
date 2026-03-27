@@ -28,6 +28,9 @@ func main() {
 	workerCount := getEnvInt("WORKER_COUNT", 3)
 	queueSize := getEnvInt("QUEUE_SIZE", 10)
 	taskTTL := getEnvDuration("TASK_TTL", 1*time.Hour)
+	readTimeout := getEnvDuration("HTTP_READ_TIMEOUT", 5*time.Second)
+	writeTimeout := getEnvDuration("HTTP_WRITE_TIMEOUT", 10*time.Second)
+	idleTimeout := getEnvDuration("HTTP_IDLE_TIMEOUT", 120*time.Second)
 	if workerCount <= 0 {
 		slog.Error("Invalid configuration: WORKER_COUNT must be greater than 0", "worker_count", workerCount)
 		os.Exit(1)
@@ -37,7 +40,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("Configuration", "worker_count", workerCount, "queue_size", queueSize, "task_ttl", taskTTL)
+	slog.Info("Configuration",
+		"worker_count", workerCount,
+		"queue_size", queueSize,
+		"task_ttl", taskTTL,
+		"read_timeout", readTimeout,
+		"write_timeout", writeTimeout,
+		"idle_timeout", idleTimeout,
+	)
 
 	store := task.NewShardedStore(32)
 
@@ -78,8 +88,11 @@ func main() {
 
 	srv := server.NewServer(store, pool, metricsCollector, metricsHandler)
 	httpServer := &http.Server{
-		Addr:    ":8080",
-		Handler: srv,
+		Addr:         ":8080",
+		Handler:      srv,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
 	}
 
 	// 4. Handle graceful shutdown

@@ -39,8 +39,8 @@ Tune the engine performance via standard environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WORKER_COUNT` | `3` | Number of concurrent worker goroutines |
-| `QUEUE_SIZE` | `10` | Size of the internal task job channel (backpressure) |
+| `WORKER_COUNT` | `50`    | Number of concurrent worker goroutines |
+| `QUEUE_SIZE` | `500`   | Size of the internal task job channel (backpressure) |
 
 ### 6. Observability
 - **Metrics Endpoint:** `GET /metrics` exports Prometheus-formatted data via OTEL.
@@ -67,10 +67,25 @@ docker-compose up --build
 ```bash
 make test
 ```
+## Load Testing
 
-Here’s a tighter, clearer version:
+### 8. Stress Testing with k6 (`load-tests/stress_test.js`)
 
-### 8. API Testing with Bruno (`bruno/`)
+This project includes a **k6** stress test to evaluate system stability and performance under heavy load.
+
+*   **Load Profile:**
+    *   **Ramp-up:** Gradually increases to 50 virtual users (VUs) over 1 minute.
+    *   **Peak Load:** Sustains 100 VUs for 3 minutes to simulate high traffic.
+    *   **Ramp-down:** Controlled reduction to 0 VUs over 1 minute and 30 seconds.
+*   **Performance Thresholds:**
+    *   **Error Rate:** Must stay below 1% (`http_req_failed < 0.01`).
+    *   **Latency (p95):** 95% of requests must complete under 500ms (`p(95) < 500`).
+*   **SRE Value:**
+    *   **Capacity Planning:** Identifies the saturation point of the worker pool and internal queue.
+    *   **Reliability Verification:** Ensures the system gracefully handles backpressure without crashing.
+    *   **SLO Alignment:** Validates that latency and error rate targets are met under realistic stress.
+
+### 9. API Testing with Bruno (`bruno/`)
 
 The `bruno/` directory provides a ready-to-run API test collection for this service using **Bruno**, an offline-first alternative to Postman.
 
@@ -78,7 +93,12 @@ The `bruno/` directory provides a ready-to-run API test collection for this serv
 * **Usage:** Validate key endpoints (e.g. health, metrics, create/get task) locally without cloud dependencies.
 * **Benefit:** Fast, reproducible testing with no external sync or account required.
 
-Want a short “getting started” snippet for running the collection?
+## Future Improvements
+ - **Distributed Task Queue:** Transition to **RabbitMQ** or **Redis** for persistent, multi-node task distribution, improving horizontal scalability.
+ - **Resilience Patterns:** Implement **Circuit Breaker** (e.g., using [`sony/gobreaker`](https://github.com/sony/gobreaker.git)) and **Retries** with exponential backoff for external API calls/worker failures.
+ - **Persistent Storage:** Replace the in-memory `TaskStore` with **PostgreSQL** to maintain state across service restarts.
+ - **Auth/AuthZ:** Add API key or JWT authentication to secure task submission and status endpoints.
+ - **Priority Queuing:** Enable a priority system to ensure critical tasks bypass the standard queue when under heavy load.
 
 ---
 

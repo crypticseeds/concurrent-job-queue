@@ -3,6 +3,7 @@ package task
 import (
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestMemStore(t *testing.T) {
@@ -86,5 +87,50 @@ func testStore(t *testing.T, s Store) {
 			}()
 		}
 		wg.Wait()
+	})
+
+	t.Run("Cleanup", func(t *testing.T) {
+		task1 := NewTask("t1", nil) // Completed, old
+		task2 := NewTask("t2", nil) // Completed, new
+		task3 := NewTask("t3", nil) // Failed, old
+		task4 := NewTask("t4", nil) // Running, old (should NOT be cleaned)
+
+		s.Add(task1)
+		s.Add(task2)
+		s.Add(task3)
+		s.Add(task4)
+
+		_ = s.UpdateStatus("t1", StatusCompleted)
+		_ = s.UpdateStatus("t2", StatusCompleted)
+		_ = s.UpdateStatus("t3", StatusFailed)
+		_ = s.UpdateStatus("t4", StatusRunning)
+
+		// Manually backdate UpdatedAt for "old" tasks
+		// Since we can't easily reach into the store's private map for ShardedStore without reflecting,
+		// we'll rely on the fact that MemStore is used by ShardedStore and we can test MemStore specifically
+		// or just use a very short TTL and sleep.
+		// However, for a robust test, let's just use a short TTL.
+
+		time.Sleep(100 * time.Millisecond)
+		ttl := 50 * time.Millisecond
+
+		// task2 is "new" because we update it just before cleanup
+		_ = s.UpdateStatus("t2", StatusCompleted)
+
+		s.Cleanup(ttl)
+
+		// t1 and t3 should be gone. t2 and t4 should remain.
+		if _, err := s.Get("t1"); err == nil {
+			t.Error("expected t1 to be cleaned up")
+		}
+		if _, err := s.Get("t3"); err == nil {
+			t.Error("expected t3 to be cleaned up")
+		}
+		if _, err := s.Get("t2"); err != nil {
+			t.Error("expected t2 to remain (newly updated)")
+		}
+		if _, err := s.Get("t4"); err != nil {
+			t.Error("expected t4 to remain (not in terminal state)")
+		}
 	})
 }

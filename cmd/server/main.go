@@ -38,7 +38,7 @@ func main() {
 
 	slog.Info("Configuration", "worker_count", workerCount, "queue_size", queueSize)
 
-	store := task.NewMemStore()
+	store := task.NewShardedStore(32)
 
 	var metricsCollector metrics.Collector
 	var metricsHandler http.Handler

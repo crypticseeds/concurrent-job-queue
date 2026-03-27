@@ -44,11 +44,17 @@ export default function () {
     if (check(res, { 'POST 201': (r) => r.status === 201 })) {
       try {
         const body = JSON.parse(res.body);
-        if (body.id) {
+        if (body && body.id) {
           createdTaskIds.push(body.id);
           if (createdTaskIds.length > MAX_TASK_IDS_TO_TRACK) createdTaskIds.shift();
+        } else {
+          // If 201 but body.id is missing, it's a failure
+          failedPostRequests.add(1);
         }
-      } catch (e) { /* ignore parse error */ }
+      } catch (e) {
+        // If JSON.parse fails, it's a failure
+        failedPostRequests.add(1);
+      }
     } else {
       failedPostRequests.add(1);
     }

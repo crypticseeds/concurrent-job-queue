@@ -304,7 +304,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(tasks_failed_total[5m])) / sum(rate(tasks_created_total[5m])) * 100",
+          "expr": "sum(rate(tasks_failed_total[5m])) / (sum(rate(tasks_succeeded_total[5m])) + sum(rate(tasks_failed_total[5m]))) * 100",
           "legendFormat": "Failure Rate %",
           "range": true,
           "refId": "A"

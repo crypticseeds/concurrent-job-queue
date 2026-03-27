@@ -145,5 +145,9 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		slog.Warn("Invalid environment variable duration, using default", "key", key, "value", val, "default", defaultValue)
 		return defaultValue
 	}
+	if d <= 0 {
+		slog.Warn("Environment variable duration must be positive, using default", "key", key, "value", val, "default", defaultValue)
+		return defaultValue
+	}
 	return d
 }

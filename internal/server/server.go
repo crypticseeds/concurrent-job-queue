@@ -100,7 +100,10 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	s.store.Add(t)
 
 	// Submit to worker pool
-	s.pool.Submit(taskID)
+	s.pool.Submit(worker.Job{
+		TaskID:  taskID,
+		Payload: req.Payload,
+	})
 
 	s.metrics.IncTasksCreated()
 

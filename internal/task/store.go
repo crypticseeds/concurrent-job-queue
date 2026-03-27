@@ -2,6 +2,7 @@ package task
 
 import (
 	"errors"
+	"hash/fnv"
 	"sync"
 	"time"
 )
@@ -18,6 +19,7 @@ type Store interface {
 }
 
 // MemStore is an in-memory implementation of the Store interface.
+// It uses a single RWMutex, which can become a bottleneck under high concurrency.
 type MemStore struct {
 	mu    sync.RWMutex
 	tasks map[string]*Task
@@ -59,4 +61,49 @@ func (s *MemStore) UpdateStatus(id string, status Status) error {
 	t.Status = status
 	t.UpdatedAt = time.Now()
 	return nil
+}
+
+// ShardedStore is a highly concurrent implementation of the Store interface.
+// It distributes tasks across multiple shards to reduce lock contention.
+type ShardedStore struct {
+	shards []*MemStore
+	count  uint32
+}
+
+// NewShardedStore initializes a new sharded store with the specified number of shards.
+// The shard count should be a power of two for optimal distribution.
+func NewShardedStore(shardCount uint32) *ShardedStore {
+	if shardCount == 0 {
+		shardCount = 32
+	}
+	shards := make([]*MemStore, shardCount)
+	for i := range shardCount {
+		shards[i] = NewMemStore()
+	}
+	return &ShardedStore{
+		shards: shards,
+		count:  shardCount,
+	}
+}
+
+// getShard returns the shard responsible for the given task ID.
+func (s *ShardedStore) getShard(id string) *MemStore {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(id))
+	return s.shards[h.Sum32()%s.count]
+}
+
+// Add saves a new task to the appropriate shard in the sharded store.
+func (s *ShardedStore) Add(t *Task) {
+	s.getShard(t.ID).Add(t)
+}
+
+// Get retrieves a task by ID from the appropriate shard.
+func (s *ShardedStore) Get(id string) (*Task, error) {
+	return s.getShard(id).Get(id)
+}
+
+// UpdateStatus changes the status of an existing task in the appropriate shard.
+func (s *ShardedStore) UpdateStatus(id string, status Status) error {
+	return s.getShard(id).UpdateStatus(id, status)
 }

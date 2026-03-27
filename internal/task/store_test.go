@@ -7,7 +7,15 @@ import (
 
 func TestMemStore(t *testing.T) {
 	s := NewMemStore()
+	testStore(t, s)
+}
 
+func TestShardedStore(t *testing.T) {
+	s := NewShardedStore(8)
+	testStore(t, s)
+}
+
+func testStore(t *testing.T, s Store) {
 	t.Run("Add and Get", func(t *testing.T) {
 		taskID := "test-task-1"
 		task := NewTask(taskID, "payload")
@@ -54,7 +62,6 @@ func TestMemStore(t *testing.T) {
 
 	t.Run("Concurrent Add and UpdateStatus", func(t *testing.T) {
 		const n = 100
-		store := NewMemStore()
 		var wg sync.WaitGroup
 
 		// Concurrent adds
@@ -63,19 +70,19 @@ func TestMemStore(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				id := "concurrent-task-" + string(rune(i))
-				store.Add(NewTask(id, nil))
+				s.Add(NewTask(id, nil))
 			}()
 		}
 		wg.Wait()
 
 		// Concurrent updates to same task
 		taskID := "single-task"
-		store.Add(NewTask(taskID, nil))
+		s.Add(NewTask(taskID, nil))
 		wg.Add(n)
 		for range n {
 			go func() {
 				defer wg.Done()
-				_ = store.UpdateStatus(taskID, StatusRunning)
+				_ = s.UpdateStatus(taskID, StatusRunning)
 			}()
 		}
 		wg.Wait()

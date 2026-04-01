@@ -148,6 +148,17 @@
           "legendFormat": "Failed / sec",
           "range": true,
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "rate(tasks_rejected_total[1m])",
+          "legendFormat": "Rejected / sec",
+          "range": true,
+          "refId": "D"
         }
       ],
       "title": "Throughput Rates (Created vs Processed)",
@@ -304,7 +315,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(tasks_failed_total[5m])) / (sum(rate(tasks_succeeded_total[5m])) + sum(rate(tasks_failed_total[5m]))) * 100",
+          "expr": "sum(rate(tasks_failed_total[5m]) + rate(tasks_rejected_total[5m])) / (sum(rate(tasks_completed_total[5m])) + sum(rate(tasks_failed_total[5m]) + rate(tasks_rejected_total[5m]))) * 100",
           "legendFormat": "Failure Rate %",
           "range": true,
           "refId": "A"
@@ -502,7 +513,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "tasks_failed_total",
+          "expr": "tasks_failed_total + tasks_rejected_total",
           "legendFormat": "Total Failed",
           "range": true,
           "refId": "A"
@@ -710,6 +721,64 @@
       ],
       "title": "Memory Usage",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 16,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showthresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(tasks_completed_total[1m]))",
+          "legendFormat": "Completed Tasks / min",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Completed Tasks per Minute",
+      "type": "gauge"
     }
   ],
   "refresh": "5s",

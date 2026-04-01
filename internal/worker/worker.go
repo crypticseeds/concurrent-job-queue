@@ -76,9 +76,11 @@ func (p *Pool) worker(id int) {
 			tlog.Error("Error updating status to RUNNING", "error", err)
 		}
 
-		// Simulate work (2–5 seconds) using job.Payload if needed
-		// For now, let's use a fixed 3s as per previous implementation.
+		// Simulate work (duration can be passed in payload for testing)
 		workDuration := 3 * time.Second
+		if d, ok := job.Payload.(time.Duration); ok {
+			workDuration = d
+		}
 		tlog.Info("Processing task", "duration", workDuration)
 		time.Sleep(workDuration)
 

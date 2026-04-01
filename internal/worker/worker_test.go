@@ -26,7 +26,7 @@ func TestPool(t *testing.T) {
 		sTask := task.NewTask(taskID, nil)
 		store.Add(sTask)
 
-		pool.Submit(Job{TaskID: taskID, Payload: nil})
+		pool.Submit(Job{TaskID: taskID, Payload: 100 * time.Millisecond})
 
 		// Poll for completion (max 5s, given 3s simulation)
 		deadline := time.Now().Add(6 * time.Second)
@@ -56,8 +56,8 @@ func TestPool(t *testing.T) {
 		// Submit 2 tasks that take 3s each
 		store.Add(task.NewTask("s1", nil))
 		store.Add(task.NewTask("s2", nil))
-		pool.Submit(Job{TaskID: "s1", Payload: nil})
-		pool.Submit(Job{TaskID: "s2", Payload: nil})
+		pool.Submit(Job{TaskID: "s1", Payload: 300 * time.Millisecond})
+		pool.Submit(Job{TaskID: "s2", Payload: 300 * time.Millisecond})
 
 		// Wait a tiny bit for workers to pick them up
 		time.Sleep(100 * time.Millisecond)
@@ -66,8 +66,8 @@ func TestPool(t *testing.T) {
 		pool.Shutdown()
 		elapsed := time.Since(start)
 
-		// Shutdown should wait for the 3s tasks to finish
-		if elapsed < 2*time.Second {
+		// Shutdown should wait for the tasks to finish
+		if elapsed < 150*time.Millisecond {
 			t.Errorf("pool shut down too fast (%v), didn't wait for tasks", elapsed)
 		}
 

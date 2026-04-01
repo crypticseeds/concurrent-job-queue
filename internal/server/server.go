@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/crypticseeds/concurrent-job-queue/internal/metrics"
+	"github.com/crypticseeds/concurrent-job-queue/internal/queue"
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 	"github.com/crypticseeds/concurrent-job-queue/internal/worker"
 	"github.com/google/uuid"
@@ -16,6 +17,7 @@ import (
 // Server represents the HTTP server for the concurrent job queue.
 type Server struct {
 	store          task.Store
+	queue          queue.Queue
 	pool           *worker.Pool
 	metrics        metrics.Collector
 	metricsHandler http.Handler
@@ -23,9 +25,10 @@ type Server struct {
 }
 
 // NewServer initializes a new Server with dependencies.
-func NewServer(store task.Store, pool *worker.Pool, metrics metrics.Collector, metricsHandler http.Handler) *Server {
+func NewServer(store task.Store, q queue.Queue, pool *worker.Pool, metrics metrics.Collector, metricsHandler http.Handler) *Server {
 	s := &Server{
 		store:          store,
+		queue:          q,
 		pool:           pool,
 		metrics:        metrics,
 		metricsHandler: metricsHandler,
@@ -99,17 +102,14 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	// Persist to store
 	s.store.Add(t)
 
-	// Submit to worker pool
-	if err := s.pool.Submit(worker.Job{
-		TaskID:  taskID,
-		Payload: req.Payload,
-	}); err != nil {
-		if errors.Is(err, worker.ErrQueueFull) {
+	// Enqueue task
+	if err := s.queue.Enqueue(t); err != nil {
+		if errors.Is(err, queue.ErrQueueFull) {
 			s.metrics.IncTasksRejected()
 			http.Error(w, "service unavailable: queue full", http.StatusServiceUnavailable)
 			return
 		}
-		// Fallback for other errors if any
+		slog.Error("Failed to enqueue task", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

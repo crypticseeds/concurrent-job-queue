@@ -95,6 +95,7 @@ make build && make run
  - **HA Redis/Postgres:** Deploy Redis Sentinel and PostgreSQL replication for high availability.
  - **RabbitMQ Support:** Add an implementation of the `Queue` interface for RabbitMQ to support more complex routing patterns.
  - **Dead Letter Queue (DLQ):** Automatically move tasks that exceed maximum retries to a separate DLQ for manual inspection.
+
 ## Load Testing
 
 ### 8. Stress Testing with k6 (`load-tests/stress_test.js`)

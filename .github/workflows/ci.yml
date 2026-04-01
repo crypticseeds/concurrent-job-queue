@@ -42,7 +42,7 @@ jobs:
       run: go test -v -race -coverprofile=coverage.out ./...
 
     - name: Upload coverage report
-      uses: actions/upload-artifact@4ced059661292c4d291987351657f12f3b7700a3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: coverage.out
@@ -57,7 +57,7 @@ jobs:
         fetch-depth: 0 # Full history for SonarQube
 
     - name: Download coverage report
-      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc088303
+      uses: actions/download-artifact@v8
       with:
         name: coverage-report
 
@@ -69,6 +69,7 @@ jobs:
         args: >
           -Dsonar.projectKey=crypticseeds_concurrent-job-queue
           -Dsonar.organization=devopsfoundry
+          -Dsonar.tests=.
           -Dsonar.test.inclusions=**/*_test.go
           -Dsonar.go.coverage.reportPaths=coverage.out
 

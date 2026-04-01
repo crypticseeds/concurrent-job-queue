@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for concurrent-job-queue
 
 # Build Stage
-FROM golang:1.26-alpine3.23 AS builder
+FROM golang:tip-alpine3.22 AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/job-queue ./cmd/server/main.go
 
 # Production Stage
-FROM alpine:latest
+FROM alpine:3.22.3
 
 # Install CA certificates for potential external requests
 RUN apk --no-cache add ca-certificates

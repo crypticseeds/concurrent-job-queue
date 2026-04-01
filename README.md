@@ -90,12 +90,6 @@ make build && make run
 
 ---
 
-## Future Improvements
- - **KEDA Scaling:** Implement Kubernetes Event-driven Autoscaling (KEDA) to scale worker pods based on Redis stream depth.
- - **HA Redis/Postgres:** Deploy Redis Sentinel and PostgreSQL replication for high availability.
- - **RabbitMQ Support:** Add an implementation of the `Queue` interface for RabbitMQ to support more complex routing patterns.
- - **Dead Letter Queue (DLQ):** Automatically move tasks that exceed maximum retries to a separate DLQ for manual inspection.
-
 ## Load Testing
 
 ### 8. Stress Testing with k6 (`load-tests/stress_test.js`)
@@ -123,12 +117,10 @@ The `bruno/` directory provides a ready-to-run API test collection for this serv
 * **Benefit:** Fast, reproducible testing with no external sync or account required.
 
 ## Future Improvements
- - **KEDA Scaling:** Implement Kubernetes Event-driven Autoscaling (KEDA) to scale worker pods based on Redis stream depth.
- - **HA Redis/Postgres:** Deploy Redis Sentinel and PostgreSQL replication for high availability.
- - **RabbitMQ Support:** Add an implementation of the `Queue` interface for RabbitMQ to support more complex routing patterns.
- - **Dead Letter Queue (DLQ):** Automatically move tasks that exceed maximum retries to a separate DLQ for manual inspection.
- - **Auth/AuthZ:** Add API key or JWT authentication to secure task submission and status endpoints.
- - **Priority Queuing:** Enable a priority system to ensure critical tasks bypass the standard queue when under heavy load.
+- **KEDA Scaling:** Implement Kubernetes Event-driven Autoscaling (KEDA) to scale worker pods based on Redis stream depth.
+- **HA Redis/Postgres:** Deploy Redis Sentinel and PostgreSQL replication for high availability.
+- **RabbitMQ Support:** Add an implementation of the `Queue` interface for RabbitMQ to support more complex routing patterns.
+- **Dead Letter Queue (DLQ):** Automatically move tasks that exceed maximum retries to a separate DLQ for manual inspection.
 
 ---
 

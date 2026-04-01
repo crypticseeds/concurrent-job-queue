@@ -10,52 +10,63 @@ Modern systems require a way to offload long-running or resource-intensive tasks
 ### 2. Architecture
 
 ```mermaid
-graph LR
-    API[HTTP API] -->|POST /tasks| Q[Buffered Channel]
-    Q -->|Task ID| WP[Worker Pool]
-    WP -->|Process| S[Task Store]
-    S -->|Status Update| WP
-    WP -->|Metrics| OTEL[OpenTelemetry SDK]
+graph TD
+    API[HTTP API] -->|POST /tasks| Q[Redis Streams]
+    subgraph "Distributed Worker Pool"
+        W1[Worker 1]
+        W2[Worker 2]
+        Wn[Worker N]
+    end
+    Q -->|Claim| W1
+    Q -->|Claim| W2
+    Q -->|Claim| Wn
+    W1 -->|Update State| DB[(PostgreSQL)]
+    W2 -->|Update State| DB
+    Wn -->|Update State| DB
+    W1 -.->|Metrics| OTEL[OpenTelemetry SDK]
+    W2 -.->|Metrics| OTEL
+    Wn -.->|Metrics| OTEL
     OTEL -->|Prometheus| PROM[Prometheus Server]
     PROM -->|Dashboard| GRAF[Grafana]
 ```
 
-The system uses a **producer-consumer** model with goroutines and channels to manage concurrent workloads.
+The system is a **distributed producer-consumer** model. Multiple API instances can submit tasks to Redis Streams, and multiple stateless worker pods can consume from the same stream using **Consumer Groups** to ensure load balancing and reliability.
 
 ### 3. Core Components
-- **HTTP API:** Low-latency entry point for task submission and status tracking.
-- **Worker Pool:** Fixed-size pool of goroutines to control resource consumption (CPU/Memory).
-- **Observability (OTEL):** Native instrumentation with OpenTelemetry Go SDK for counters and metrics.
-- **Graceful Shutdown:** `context.Context` propagation ensures in-flight jobs complete before exit.
-- **Task Store:** Thread-safe state management for task lifecycle (Pending → Running → Completed).
+- **HTTP API:** Entry point for task submission. It persists the initial task state to PostgreSQL and enqueues the task to Redis Streams.
+- **Redis Streams:** Acts as the reliable, persistent message broker. It supports Consumer Groups, which allow scaling workers across multiple pods while ensuring each task is processed only once.
+- **PostgreSQL:** The source of truth for task history. It stores task payloads, current status, retry counts, and error logs.
+- **Stateless Workers:** Independent processing units that claim tasks from Redis, execute them, and update the state in PostgreSQL. They are designed to be easily scalable in a Kubernetes environment.
+- **Observability (OTEL):** Instrumented with OpenTelemetry for tracking queue depth, task processing latency, and success/failure rates.
 
-### 4. Key Design Decisions
-- **Worker Pool Pattern:** Prevents "goroutine explosion" by limiting concurrency, protecting the host system from resource exhaustion under load.
-- **Task IDs over Pointers:** We pass task IDs through channels. This ensures workers always operate on the most recent state in the `TaskStore` and eliminates memory sharing/stale data risks.
-- **Context-Awareness:** Every component respects `context.Context` to allow for clean timeouts and graceful service restarts.
+### 4. Task Lifecycle & Retries
+1.  **Submission:** A task is created with `PENDING` status in Postgres and added to Redis.
+2.  **Dequeuing:** A worker claims the task from the Redis Stream consumer group.
+3.  **Execution:** The worker updates the status to `RUNNING` in Postgres and processes the task.
+4.  **Completion:** On success, the task is marked `COMPLETED` in Postgres and `Acked` in Redis.
+5.  **Failure:** If a task fails, it is marked `FAILED` in Postgres. The system tracks `Retries` and can reschedule tasks for later processing. Redis Pending Entry List (PEL) ensures tasks that crash during processing can be reclaimed by other workers.
 
 ### 5. Configuration (Environment Variables)
-Tune the engine performance via standard environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WORKER_COUNT` | `50`    | Number of concurrent worker goroutines |
-| `QUEUE_SIZE` | `500`   | Size of the internal task job channel (backpressure) |
+| `WORKER_COUNT` | `10`    | Number of concurrent worker goroutines per pod |
+| `REDIS_ADDR` | `""`   | Address of the Redis server (e.g. `redis:6379`). If empty, uses in-memory queue. |
+| `DATABASE_URL` | `""`   | PostgreSQL connection string. If empty, uses in-memory store. |
+| `TASK_TTL` | `1h` | Time-to-live for terminal tasks (Completed/Failed) before cleanup. |
 
 ### 6. Observability
-- **Metrics Endpoint:** `GET /metrics` exports Prometheus-formatted data via OTEL.
-- **Local Monitoring:** Includes a pre-configured Prometheus and Grafana stack.
-- **Structured Logging:** JSON logs using `log/slog` for modern traceability.
+- **Metrics Endpoint:** `GET /metrics` exports:
+    - `queue_depth`: Current number of pending tasks in Redis.
+    - `task_processing_duration_seconds`: Histogram of time taken to process tasks.
+    - `tasks_completed_total` / `tasks_failed_total`: Throughput counters.
+- **Local Monitoring:** Pre-configured Prometheus and Grafana stack included in `docker-compose.yml`.
+- **Structured Logging:** JSON logs using `log/slog` for distributed tracing.
 
 ### 7. How to Run
 
-#### Local Binary
-```bash
-make build && make run
-```
-
-#### Docker Compose (Full Stack)
-Spin up the application, Prometheus, and Grafana in one command:
+#### Docker Compose (Recommended)
+This is the easiest way to run the full distributed stack (App, Redis, Postgres, Prometheus, Grafana):
 ```bash
 docker-compose up --build
 ```
@@ -63,10 +74,27 @@ docker-compose up --build
 - **Prometheus:** `http://localhost:9090`
 - **Grafana:** `http://localhost:3000` (Default: admin/admin)
 
-#### Run Tests
+#### Kubernetes (KIND Cluster)
+The project includes manifests for running in a 2-3 node KIND cluster:
+1. Ensure you have a KIND cluster running.
+2. Apply manifests:
 ```bash
-make test
+kubectl apply -k k8s/base
 ```
+
+#### Local Development
+For a quick start without Redis/Postgres (falling back to in-memory):
+```bash
+make build && make run
+```
+
+---
+
+## Future Improvements
+ - **KEDA Scaling:** Implement Kubernetes Event-driven Autoscaling (KEDA) to scale worker pods based on Redis stream depth.
+ - **HA Redis/Postgres:** Deploy Redis Sentinel and PostgreSQL replication for high availability.
+ - **RabbitMQ Support:** Add an implementation of the `Queue` interface for RabbitMQ to support more complex routing patterns.
+ - **Dead Letter Queue (DLQ):** Automatically move tasks that exceed maximum retries to a separate DLQ for manual inspection.
 ## Load Testing
 
 ### 8. Stress Testing with k6 (`load-tests/stress_test.js`)
@@ -94,9 +122,10 @@ The `bruno/` directory provides a ready-to-run API test collection for this serv
 * **Benefit:** Fast, reproducible testing with no external sync or account required.
 
 ## Future Improvements
- - **Distributed Task Queue:** Transition to **RabbitMQ** or **Redis** for persistent, multi-node task distribution, improving horizontal scalability.
- - **Resilience Patterns:** Implement **Circuit Breaker** (e.g., using [`sony/gobreaker`](https://github.com/sony/gobreaker.git)) and **Retries** with exponential backoff for external API calls/worker failures.
- - **Persistent Storage:** Replace the in-memory `TaskStore` with **PostgreSQL** to maintain state across service restarts.
+ - **KEDA Scaling:** Implement Kubernetes Event-driven Autoscaling (KEDA) to scale worker pods based on Redis stream depth.
+ - **HA Redis/Postgres:** Deploy Redis Sentinel and PostgreSQL replication for high availability.
+ - **RabbitMQ Support:** Add an implementation of the `Queue` interface for RabbitMQ to support more complex routing patterns.
+ - **Dead Letter Queue (DLQ):** Automatically move tasks that exceed maximum retries to a separate DLQ for manual inspection.
  - **Auth/AuthZ:** Add API key or JWT authentication to secure task submission and status endpoints.
  - **Priority Queuing:** Enable a priority system to ensure critical tasks bypass the standard queue when under heavy load.
 

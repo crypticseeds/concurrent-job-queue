@@ -33,10 +33,10 @@ go.work.sum
 gitops.md
 /bin/
 /main
-/.ai/
 /.aiassistant/
 /.idea/.gitignore
 /.coderabbitignore
 bruno/.DS_Store
 bruno/concurrent-job-queue/.DS_Stores
 bruno/concurrent-job-queue/Requests/.DS_Store
+/.ai/

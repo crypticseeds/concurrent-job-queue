@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for concurrent-job-queue
 
 # Build Stage
-FROM golang:tip-alpine3.22 AS builder
+FROM golang:1.26-alpine3.22 AS builder
 
 WORKDIR /app
 

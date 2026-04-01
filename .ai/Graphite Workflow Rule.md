@@ -94,7 +94,7 @@ gt create issue-worker-pool
 Branch naming should follow:
 
 ```
-issue-<short-description>
+<short-description>
 ```
 
 Examples:

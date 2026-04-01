@@ -32,6 +32,7 @@ go.work.sum
 # .vscode/
 gitops.md
 /bin/
+/main
 /.ai/
 /.aiassistant/
 /.idea/.gitignore

@@ -6,8 +6,26 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - WORKER_COUNT=50
-      - QUEUE_SIZE=500
+      - WORKER_COUNT=10
+      - REDIS_ADDR=redis:6379
+      - DATABASE_URL=postgres://user:password@postgres:5432/jobqueue?sslmode=disable
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=jobqueue
+    ports:
+      - "5432:5432"
 
   prometheus:
     image: prom/prometheus:latest

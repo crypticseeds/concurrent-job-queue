@@ -6,9 +6,13 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - WORKER_COUNT=10
-      - REDIS_ADDR=redis:6379
-      - DATABASE_URL=postgres://user:password@postgres:5432/jobqueue?sslmode=disable
+      - WORKER_COUNT=${WORKER_COUNT:-10}
+      - REDIS_ADDR=${REDIS_ADDR:-redis:6379}
+      - DATABASE_URL=${DATABASE_URL:-postgres://user:password@postgres:5432/jobqueue?sslmode=disable}
+      - TASK_TTL=${TASK_TTL:-1h}
+      - HTTP_READ_TIMEOUT=${HTTP_READ_TIMEOUT:-5s}
+      - HTTP_WRITE_TIMEOUT=${HTTP_WRITE_TIMEOUT:-10s}
+      - HTTP_IDLE_TIMEOUT=${HTTP_IDLE_TIMEOUT:-120s}
     depends_on:
       - redis
       - postgres
@@ -21,9 +25,9 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=jobqueue
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-jobqueue}
     ports:
       - "5432:5432"
 
@@ -39,6 +43,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
     depends_on:
       - prometheus

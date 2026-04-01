@@ -16,16 +16,19 @@ spec:
     spec:
       containers:
       - name: job-queue
-        image: docker.io/username/concurrent-job-queue:latest
+        image: docker.io/${DOCKER_USERNAME:-yourusername}/concurrent-job-queue:latest
         ports:
         - containerPort: 8080
         env:
         - name: WORKER_COUNT
-          value: "10"
+          value: "${WORKER_COUNT:-10}"
         - name: REDIS_ADDR
-          value: "redis:6379"
+          value: "${REDIS_ADDR:-redis:6379}"
         - name: DATABASE_URL
-          value: "postgres://user:password@postgres:5432/jobqueue?sslmode=disable"
+          valueFrom:
+            secretKeyRef:
+              name: job-queue-secrets
+              key: DATABASE_URL
         resources:
           limits:
             cpu: "500m"

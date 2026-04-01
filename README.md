@@ -2,7 +2,7 @@
 
 A production-grade asynchronous task processor in Go. Designed for high reliability, backpressure management, and observability using the OpenTelemetry (OTEL) ecosystem.
 
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/crypticseeds/concurrent-job-queue?utm_source=oss&utm_medium=github&utm_campaign=crypticseeds%2Fconcurrent-job-queue&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews) 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/crypticseeds/concurrent-job-queue?utm_source=oss&utm_medium=github&utm_campaign=crypticseeds%2Fconcurrent-job-queue&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews) [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=crypticseeds_concurrent-job-queue&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=crypticseeds_concurrent-job-queue)
 
 ### 1. Problem
 Modern systems require a way to offload long-running or resource-intensive tasks from the critical request path. This project solves that by decoupling task submission from execution, preventing HTTP handler exhaustion and ensuring task persistence during transient failures.

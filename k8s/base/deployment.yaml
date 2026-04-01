@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: concurrent-job-queue
+  labels:
+    app: concurrent-job-queue
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: concurrent-job-queue
+  template:
+    metadata:
+      labels:
+        app: concurrent-job-queue
+    spec:
+      containers:
+      - name: job-queue
+        image: docker.io/username/concurrent-job-queue:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: WORKER_COUNT
+          value: "10"
+        - name: REDIS_ADDR
+          value: "redis:6379"
+        - name: DATABASE_URL
+          value: "postgres://user:password@postgres:5432/jobqueue?sslmode=disable"
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5

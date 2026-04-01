@@ -12,12 +12,16 @@ import (
 	"strconv"
 
 	"github.com/crypticseeds/concurrent-job-queue/internal/metrics"
+	"github.com/crypticseeds/concurrent-job-queue/internal/queue"
 	"github.com/crypticseeds/concurrent-job-queue/internal/server"
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 	"github.com/crypticseeds/concurrent-job-queue/internal/worker"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	// Initialize structured logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
@@ -26,30 +30,13 @@ func main() {
 
 	// 1. Initialize dependencies
 	workerCount := getEnvInt("WORKER_COUNT", 3)
-	queueSize := getEnvInt("QUEUE_SIZE", 10)
 	taskTTL := getEnvDuration("TASK_TTL", 1*time.Hour)
 	readTimeout := getEnvDuration("HTTP_READ_TIMEOUT", 5*time.Second)
 	writeTimeout := getEnvDuration("HTTP_WRITE_TIMEOUT", 10*time.Second)
 	idleTimeout := getEnvDuration("HTTP_IDLE_TIMEOUT", 120*time.Second)
-	if workerCount <= 0 {
-		slog.Error("Invalid configuration: WORKER_COUNT must be greater than 0", "worker_count", workerCount)
-		os.Exit(1)
-	}
-	if queueSize <= 0 {
-		slog.Error("Invalid configuration: QUEUE_SIZE must be greater than 0", "queue_size", queueSize)
-		os.Exit(1)
-	}
 
-	slog.Info("Configuration",
-		"worker_count", workerCount,
-		"queue_size", queueSize,
-		"task_ttl", taskTTL,
-		"read_timeout", readTimeout,
-		"write_timeout", writeTimeout,
-		"idle_timeout", idleTimeout,
-	)
-
-	store := task.NewShardedStore(32)
+	redisAddr := os.Getenv("REDIS_ADDR")
+	pgConnString := os.Getenv("DATABASE_URL")
 
 	var metricsCollector metrics.Collector
 	var metricsHandler http.Handler
@@ -64,29 +51,67 @@ func main() {
 		metricsHandler = metricsExporter
 	}
 
-	pool := worker.NewPool(store, metricsCollector, workerCount, queueSize)
+	var store task.Store
+	var q queue.Queue
+	var pool *worker.Pool
+
+	if pgConnString != "" {
+		slog.Info("Using PostgreSQL store")
+		pgStore, err := task.NewPostgresStore(ctx, pgConnString)
+		if err != nil {
+			slog.Error("Failed to initialize Postgres store", "error", err)
+			os.Exit(1)
+		}
+		store = pgStore
+	} else {
+		slog.Info("Using in-memory sharded store")
+		store = task.NewShardedStore(32)
+	}
+
+	if redisAddr != "" {
+		slog.Info("Using Redis queue", "addr", redisAddr)
+		rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+		hostname, _ := os.Hostname()
+		redisQueue, err := queue.NewRedisQueue(rdb, "task_stream", "worker_group", hostname)
+		if err != nil {
+			slog.Error("Failed to initialize Redis queue", "error", err)
+			os.Exit(1)
+		}
+		q = redisQueue
+
+		pool = worker.NewPool(store, q, metricsCollector, workerCount)
+		pool.SetRedisClient(rdb) // Reuse the same client pool
+	} else {
+		slog.Info("Using in-memory queue")
+		q = queue.NewInMemoryQueue(100) // Default to 100 for in-memory
+		pool = worker.NewPool(store, q, metricsCollector, workerCount)
+	}
 
 	// 2. Start worker pool
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	pool.Start(ctx)
 
-	// 3. Start background cleanup
+	// 3. Start background cleanup and metrics update
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
+		metricsTicker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
+		defer metricsTicker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				slog.Debug("Running background task cleanup", "ttl", taskTTL)
 				store.Cleanup(taskTTL)
+			case <-metricsTicker.C:
+				if depth, err := q.Depth(); err == nil {
+					metricsCollector.SetQueueDepth(depth)
+				}
 			case <-ctx.Done():
 				return
 			}
 		}
 	}()
 
-	srv := server.NewServer(store, pool, metricsCollector, metricsHandler)
+	srv := server.NewServer(store, q, pool, metricsCollector, metricsHandler)
 	httpServer := &http.Server{
 		Addr:         ":8080",
 		Handler:      srv,
@@ -95,19 +120,14 @@ func main() {
 		IdleTimeout:  idleTimeout,
 	}
 
-	// 4. Handle graceful shutdown
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
 	go func() {
 		slog.Info("Server listening", "addr", httpServer.Addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("Server failed", "error", err)
-			os.Exit(1)
 		}
 	}()
 
-	<-stop
+	<-ctx.Done()
 	slog.Info("Shutting down server")
 
 	// 5. Shutdown sequence

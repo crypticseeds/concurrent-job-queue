@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/crypticseeds/concurrent-job-queue/internal/metrics"
+	"github.com/crypticseeds/concurrent-job-queue/internal/queue"
 	"github.com/crypticseeds/concurrent-job-queue/internal/task"
 )
 
@@ -16,19 +17,20 @@ func TestPool(t *testing.T) {
 
 	t.Run("Task Lifecycle", func(t *testing.T) {
 		// Use a small pool
-		pool := NewPool(store, collector, 1, 10)
+		q := queue.NewInMemoryQueue(10)
+		pool := NewPool(store, q, collector, 1)
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
 		pool.Start(ctx)
 
 		taskID := "lifecycle-test"
-		sTask := task.NewTask(taskID, nil)
+		sTask := task.NewTask(taskID, "100ms")
 		store.Add(sTask)
 
-		pool.Submit(Job{TaskID: taskID, Payload: 100 * time.Millisecond})
+		q.Enqueue(sTask)
 
-		// Poll for completion (max 5s, given 3s simulation)
+		// Poll for completion (max 5s, given 100ms simulation)
 		deadline := time.Now().Add(6 * time.Second)
 		var lastTask *task.Task
 		for time.Now().Before(deadline) {
@@ -50,19 +52,24 @@ func TestPool(t *testing.T) {
 	})
 
 	t.Run("Shutdown", func(t *testing.T) {
-		pool := NewPool(store, collector, 2, 10)
-		pool.Start(t.Context())
+		q := queue.NewInMemoryQueue(10)
+		pool := NewPool(store, q, collector, 2)
+		ctx, cancel := context.WithCancel(t.Context())
+		pool.Start(ctx)
 
-		// Submit 2 tasks that take 3s each
-		store.Add(task.NewTask("s1", nil))
-		store.Add(task.NewTask("s2", nil))
-		pool.Submit(Job{TaskID: "s1", Payload: 300 * time.Millisecond})
-		pool.Submit(Job{TaskID: "s2", Payload: 300 * time.Millisecond})
+		// Submit 2 tasks that take 300ms each
+		task1 := task.NewTask("s1", "300ms")
+		task2 := task.NewTask("s2", "300ms")
+		store.Add(task1)
+		store.Add(task2)
+		q.Enqueue(task1)
+		q.Enqueue(task2)
 
 		// Wait a tiny bit for workers to pick them up
 		time.Sleep(100 * time.Millisecond)
 
 		start := time.Now()
+		cancel()
 		pool.Shutdown()
 		elapsed := time.Since(start)
 
@@ -79,27 +86,19 @@ func TestPool(t *testing.T) {
 	})
 
 	t.Run("Non-Blocking Submit (Queue Full)", func(t *testing.T) {
-		// Pool with 0 queue size and 1 worker
-		pool := NewPool(store, collector, 1, 0)
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-		pool.Start(ctx)
+		// Queue with 1 slot and 0 worker (to keep slot occupied)
+		q := queue.NewInMemoryQueue(1)
 
-		// Wait a bit to ensure worker is ready
-		time.Sleep(50 * time.Millisecond)
-
-		// Submit one job to occupy the worker
-		job1 := Job{TaskID: "j1", Payload: nil}
-		if err := pool.Submit(job1); err != nil {
-			t.Fatalf("failed to submit first job: %v", err)
+		// Fill the queue
+		task1 := task.NewTask("j1", nil)
+		if err := q.Enqueue(task1); err != nil {
+			t.Fatalf("failed to enqueue first task: %v", err)
 		}
 
-		// Since queue size is 0, the next submit should fail immediately
-		// but we might need a tiny sleep to ensure the worker has NOT yet finished
-		// OR we can just rely on the fact that the worker takes 3s.
-		job2 := Job{TaskID: "j2", Payload: nil}
-		err := pool.Submit(job2)
-		if !errors.Is(err, ErrQueueFull) {
+		// Next enqueue should fail
+		task2 := task.NewTask("j2", nil)
+		err := q.Enqueue(task2)
+		if !errors.Is(err, queue.ErrQueueFull) {
 			t.Errorf("expected ErrQueueFull, got %v", err)
 		}
 	})
